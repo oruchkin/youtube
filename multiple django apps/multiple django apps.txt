@@ -1,0 +1,189 @@
+
+1) bvom deployment:
+
+
+0) sudo apt update
+
+0.5) sudo apt upgrade
+
+2) mkdir bvom
+
+3) cd bvom
+
+3.5) sudo apt install python3-pip python3-dev nginx 
+
+3.6) sudo apt install virtualenv
+
+4) virtualenv venv
+
+5) source venv/bin/activate
+
+6) pip install django gunicorn
+
+7) django-admin.py startproject bvom ~/bvom
+
+8) nano ~/bvom/bvom/settings.py
+
+a) import os
+b) ALLOWED_HOSTS = ["*"]
+c) TIME_ZONE = 'Europe/Moscow'
+d) STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
+
+9) python manage.py makemigrations
+
+10) python manage.py migrate
+
+11) python manage.py createsuperuser
+
+12) python manage.py collectstatic
+
+13) python manage.py runserver 0.0.0.0:8000
+
+a) заходим на (ip)0.0.0.0:8000/admin
+должен работать сайт и в админке должны быть стили css
+
+14) gunicorn --bind 0.0.0.0:8000 bvom.wsgi
+(запускать в папке с manage.py)
+a) заходим на (ip)0.0.0.0:8000/admin
+должен работать сайт и в админе должно НЕ БЫТЬ стилей css (все коряво)
+
+
+15) deactivate
+
+16) sudo nano /etc/systemd/system/bvom.service
+
+Внимательно замени все слова “bvom” на название своего проекта, 
+если здесь ошибиться исправить будет очень сложно, 
+проверь три раза перед следующим шагом
+———————————————————————————————————————————————————
+
+[Unit]
+Description=gunicorn daemon
+After=network.target
+
+[Service]
+User=yourname
+Group=www-data
+WorkingDirectory=/home/yourname/bvom
+ExecStart=/home/yourname/bvom/venv/bin/gunicorn --access-logfile - --workers 3 --bind unix:/home/yourname/bvom/bvom.sock bvom.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
+
+
+
+*original
+———————————————————————————————————————————————————
+new version with logs:
+https://sys-adm.in/systadm/nix/945-vklyuchenie-logirovaniya-v-gunicorn.html
+[Unit]
+Description=gunicorn daemon
+After=network.target
+
+[Service]
+User=yourname
+Group=www-data
+WorkingDirectory=/home/yourname/bvom
+ExecStart=/home/yourname/bvom/venv/bin/gunicorn --access-logfile - --workers 3 --bind unix:/home/yourname/bvom/bvom.sock bvom.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
+
+
+
+chown -R yourname:yourname /var/log/gunicorn/
+——
+
+
+
+17) sudo systemctl start bvom
+
+18) sudo systemctl enable bvom
+Это создаст ссылку: 
+Created symlink /etc/systemd/system/multi-user.target.wants/mail.service → /etc/systemd/system/mail.service.
+
+19) в папке с проектом mail (там где manage.py) ДОЛЖЕН (ОБЯЗАН) появиться файл
+“mail.sock”
+
+~~~~~~~~~~~~~
+admin@django:~/mail$ ls
+db.sqlite3  mail  mail.sock  manage.py  static  venv
+~~~~~~~~~~~~~
+
+если он не появился то ошибка гдето в путях на шаге №16, там где нужно было три раза перепроверить
+пришло время страдать, можно посмотреть журнал “sudo journalctl -u gunicorn”
+
+20) sudo systemctl status mail
+    должен показаться статус службы mail должно быть:
+    Active: active (running) (зеленым цветом) что все ок
+
+
+21) Настройка Nginx:
+
+sudo nano /etc/nginx/sites-available/mail
+
+замени в конфиге mail на свой проект (3 места и 1 адрес)
+———————————————————————————————————————————————————
+server {
+listen 80;
+server_name mail.promo-miner.art;
+
+location = /favicon.ico { access_log off; log_not_found off; }
+location /static/ {
+root /home/admin/mail;
+}
+
+location / {
+include proxy_params;
+proxy_pass http://unix:/home/admin/mail/mail.sock;
+}
+}
+———————————————————————————————————————————————————
+
+22) sudo ln -s /etc/nginx/sites-available/mail /etc/nginx/sites-enabled
+
+23) a) cd /etc/nginx/sites-enabled
+    b) ls
+    смотри чтобы твой проект “mail” появился в sites-enabled (голубым цветом)
+
+24) sudo nginx -t
+    
+    Проверка конфига nginx на ошибки
+
+
+25) sudo systemctl reload nginx
+
+26) дальше прикрути домен который указал в настройках nginx к адресу сервера
+    а если указал там ip адрес виртуальной машины, то по адресу виртуальной машины все будет работать
+ 
+27) зайдин на example.com/admin и посмотри чтобы у него были стили (css) должны быть, если есть то все круто
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
